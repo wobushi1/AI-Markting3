@@ -28,6 +28,21 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 
 # ==========================================
+# 工具函数：获取 Poppler 路径 (新增)
+# ==========================================
+def get_poppler_path():
+    """
+    确定 Poppler 的 bin 路径。
+    1. 如果是 PyInstaller 打包后的环境 (sys._MEIPASS)，返回打包内的路径。
+    2. 如果是本地开发环境，返回 None (依赖系统 PATH 环境变量)。
+    """
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller 将资源解压到的临时文件夹
+        # 对应 spec/cmd 中的 --add-data "poppler/bin;poppler/bin"
+        return os.path.join(sys._MEIPASS, 'poppler', 'bin')
+    return None
+
+# ==========================================
 # 评分标准配置 (保持不变)
 # ==========================================
 RUBRIC_PROMPT = """
@@ -98,6 +113,7 @@ class Worker(QThread):
     def run(self):
         try:
             base64_image = self.encode_image(self.file_path)
+            # 注意：这里的 base_url 是针对火山引擎的，请确保正确
             client = OpenAI(api_key=self.api_key, base_url="https://ark.cn-beijing.volces.com/api/v3")
             
             response = client.chat.completions.create(
@@ -275,7 +291,11 @@ class EssayGraderApp(QMainWindow):
                 try:
                     self.status_label.setText(f"正在拆分 PDF: {filename}...")
                     QApplication.processEvents()
-                    pages = convert_from_path(f)
+                    
+                    # === 修改点：使用 get_poppler_path() 传入正确的路径 ===
+                    poppler_bin = get_poppler_path()
+                    pages = convert_from_path(f, poppler_path=poppler_bin)
+                    
                     for i, page in enumerate(pages):
                         page_filename = f"{os.path.splitext(filename)[0]}_Page_{i+1}.jpg"
                         temp_path = os.path.join(self.temp_dir, page_filename)
@@ -283,7 +303,7 @@ class EssayGraderApp(QMainWindow):
                         display_name = f"[PDF P{i+1}] {filename}"
                         self.add_item_to_list(display_name, temp_path)
                 except Exception as e:
-                    QMessageBox.warning(self, "转换失败", f"无法解析 PDF {filename}:\n{str(e)}")
+                    QMessageBox.warning(self, "转换失败", f"无法解析 PDF {filename}:\n请确保 Poppler 已安装。\n错误信息: {str(e)}")
             else:
                 self.add_item_to_list(filename, f)
             
