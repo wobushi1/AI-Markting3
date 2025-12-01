@@ -15,7 +15,8 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.9'
-        cache: 'pip' # 开启缓存，加速后续构建
+        # === 修改点：删除了 cache: 'pip' ===
+        # 因为你的项目中没有 requirements.txt 文件，开启缓存会报错
         
     - name: Download and Setup Poppler
       shell: powershell
@@ -25,12 +26,11 @@ jobs:
         Write-Host "Downloading Poppler from $Url ..."
         Invoke-WebRequest -Uri $Url -OutFile poppler.zip
         
-        # 2. 解压到临时目录 (防止文件夹名称不确定)
+        # 2. 解压到临时目录
         Write-Host "Extracting..."
         Expand-Archive poppler.zip -DestinationPath poppler_temp
         
-        # 3. 【关键修复】自动查找内部的 'bin' 文件夹
-        # 不管解压出来的父文件夹叫什么名字，递归查找名为 'bin' 的目录
+        # 3. 自动查找内部的 'bin' 文件夹
         $BinPath = Get-ChildItem -Path poppler_temp -Recurse -Directory -Filter "bin" | Select-Object -First 1 -ExpandProperty FullName
         
         if (-not $BinPath) {
@@ -54,12 +54,11 @@ jobs:
     - name: Install Dependencies
       run: |
         pip install --upgrade pip
-        # 安装你项目所需的库
+        # 直接在这里安装依赖，不需要 requirements.txt
         pip install pyinstaller PyQt5 pdf2image requests openai Pillow python-docx
         
     - name: Build with PyInstaller
-      # 注意：Windows下 --add-data 使用分号 ; 分隔
-      # 将当前目录下的 poppler/bin 打包进 EXE 内部的 poppler/bin
+      # 将 poppler/bin 打包进 EXE
       run: |
         pyinstaller --noconsole --onefile --name="EssayGrader" --add-data "poppler/bin;poppler/bin" main.py
         
